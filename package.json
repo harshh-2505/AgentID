@@ -11,7 +11,8 @@
     "start": "node server/server.js",
     "test": "node --test test/*.test.js",
     "agent": "node examples/autonomous-agent.js",
-    "service": "node examples/relying-service.js"
+    "service": "node examples/relying-service.js",
+    "build:static": "node scripts/build-static.mjs"
   },
   "exports": {
     ".": "./core/index.js",
