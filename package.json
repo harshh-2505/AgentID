@@ -4,7 +4,9 @@
   "description": "Identity, authorization and co-sign for autonomous AI agents.",
   "type": "module",
   "license": "MIT",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node server/server.js",
     "test": "node --test test/*.test.js",
@@ -13,6 +15,13 @@
   },
   "exports": {
     ".": "./core/index.js",
-    "./sdk": "./sdk/index.js"
+    "./sdk": "./sdk/index.js",
+    "./sdk/adapters": "./sdk/adapters.js"
+  },
+  "optionalDependencies": {
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.9"
   }
 }

@@ -716,7 +716,9 @@ export class Authority {
   }
 
   async approval(id) {
-    return this.store.read((tx) => tx.get('approval', id));
+    const ap = await this.store.read((tx) => tx.get('approval', id));
+    if (ap?.status === 'pending' && ap.expiresAt < this.nowMs()) return { ...ap, status: 'expired' };
+    return ap;
   }
 
   // ---------------------------------------------------------------- revocation
@@ -889,6 +891,10 @@ export class Authority {
     });
   }
 
+  async decision(id) {
+    return this.store.read(async (tx) => (await tx.getMeta('decisions', [])).find((d) => d.id === id) || null);
+  }
+
   async principal(did) {
     return this.store.read((tx) => tx.get('principal', did));
   }
@@ -913,7 +919,10 @@ export async function verifyReceipt(receipt, authorityDid, { aud, maxAgeSec = 12
   if (receipt?.type !== 'Receipt') return fail('not a receipt');
   if (!(await verifySealed(receipt, authorityDid))) return fail('receipt is not signed by the authority');
   if (aud && receipt.aud !== aud && receipt.aud !== 'any') return fail('receipt is for a different service');
-  if (Math.floor(Date.now() / 1000) - receipt.iat > maxAgeSec) return fail('receipt is too old');
+  if (receipt.authority && receipt.authority !== authorityDid) return fail('receipt names a different authority');
+  const age = Math.floor(Date.now() / 1000) - receipt.iat;
+  if (age > maxAgeSec) return fail('receipt is too old');
+  if (age < -30) return fail('receipt is dated in the future');
   return { ok: true, receipt };
 }
 

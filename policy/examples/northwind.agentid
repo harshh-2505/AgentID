@@ -1,0 +1,26 @@
+# Northwind Labs: the mandates the demo world issues (core/demo-world.js).
+# Check:  node policy/cli.js check policy/examples/northwind.agentid
+# Issue:  node policy/cli.js issue policy/examples/northwind.agentid --principal northwind.json --agents agents.json
+
+mandate "Accounts payable" for ledgerline
+  allow payments.send on vendor:* where amount <= 1500 and currency in [USD]
+  allow invoices.* on erp:northwind/*
+  budget 250000 USD
+  rate 120 per 60s
+  cosign above 750
+  delegate depth 1           # may hand invoice reading to Quill
+
+mandate "Team travel" for courier
+  allow travel.book on travel:* where amount <= 2500 and currency in [USD] and cabin in [economy, premium]
+  allow calendar.write on calendar:team/*
+  budget 120000 USD
+  cosign above 1200
+
+mandate "Market research" for scout
+  allow web.fetch on https://*
+  allow data.read on warehouse:* where classification in [public, internal]
+  allow email.send on mail:outbound where to matches [*@northwind.example]
+  rate 8 per 10s
+
+# Quill's "Invoice reading" mandate is delegated by Ledgerline, not issued by the
+# principal, so it is not in this file.
