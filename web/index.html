@@ -1,0 +1,54 @@
+<title>AgentID</title>
+<meta name="description" content="Passport control for autonomous AI agents: identity, mandates, proof of runtime and co-sign.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..800&family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..800;1,6..96,400..700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="styles.css">
+
+<div class="app" id="app">
+  <canvas class="paper-rosette" id="paperRosette" aria-hidden="true"></canvas>
+
+  <header class="topbar">
+    <a class="brand" href="#checkpoint" aria-label="AgentID home">
+      <canvas class="brand-mark" id="brandMark" width="44" height="44" aria-hidden="true"></canvas>
+      <span class="wordmark">Agent<em>ID</em></span>
+    </a>
+    <div class="chips">
+      <div class="chip" title="The authority's public identifier. Services verify receipts against it offline.">
+        <span class="label">Authority</span><code id="authDid">booting…</code>
+      </div>
+      <div class="chip">
+        <span class="label">Ledger</span><span class="num" id="ledgerHeight">0</span><code id="ledgerHead">—</code>
+      </div>
+      <div class="chip mode-chip" id="modeChip"><span class="label">Mode</span><span id="modeLabel">—</span></div>
+    </div>
+    <div class="topbar-actions">
+      <button class="pill" id="liveToggle" type="button" aria-pressed="true"><span class="pulse-dot" aria-hidden="true"></span><span>Live traffic</span></button>
+      <button class="pill" id="uvToggle" type="button" aria-pressed="false" title="Inspect under UV light (dark theme)"><span class="uv-glyph" aria-hidden="true"></span><span>UV light</span></button>
+    </div>
+  </header>
+
+  <nav class="spine" aria-label="Sections">
+    <a href="#checkpoint" data-view="checkpoint"><span class="spine-no">I</span><span class="spine-name">Checkpoint</span></a>
+    <a href="#registry" data-view="registry"><span class="spine-no">II</span><span class="spine-name">Passports</span></a>
+    <a href="#mandates" data-view="mandates"><span class="spine-no">III</span><span class="spine-name">Mandates</span></a>
+    <a href="#cosign" data-view="cosign"><span class="spine-no">IV</span><span class="spine-name">Co-sign</span><span class="badge" id="cosignBadge" hidden>0</span></a>
+    <a href="#ledger" data-view="ledger"><span class="spine-no">V</span><span class="spine-name">Ledger</span></a>
+    <a href="#reasoning" data-view="reasoning"><span class="spine-no">VI</span><span class="spine-name">Reasoning</span></a>
+  </nav>
+
+  <main class="view" id="view" tabindex="-1">
+    <div class="boot" id="boot">
+      <p class="boot-line">Generating keys for Northwind Labs, its runtime host and four agents…</p>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="vendor/gsap.min.js"></script>
+<script src="vendor/ScrambleTextPlugin.min.js"></script>
+<script src="vendor/Flip.min.js"></script>
+<script src="vendor/DrawSVGPlugin.min.js"></script>
+<script src="vendor/SplitText.min.js"></script>
+<script type="module" src="app/main.js"></script>
