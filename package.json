@@ -1,6 +1,6 @@
 {
   "name": "agentid",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Identity, authorization and co-sign for autonomous AI agents.",
   "type": "module",
   "license": "MIT",
