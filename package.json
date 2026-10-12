@@ -1,18 +1,28 @@
 {
   "name": "agentid",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Identity, authorization and co-sign for autonomous AI agents.",
   "type": "module",
   "license": "MIT",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node server/server.js",
     "test": "node --test test/*.test.js",
     "agent": "node examples/autonomous-agent.js",
-    "service": "node examples/relying-service.js"
+    "service": "node examples/relying-service.js",
+    "build:static": "node scripts/build-static.mjs"
   },
   "exports": {
     ".": "./core/index.js",
-    "./sdk": "./sdk/index.js"
+    "./sdk": "./sdk/index.js",
+    "./sdk/adapters": "./sdk/adapters.js"
+  },
+  "optionalDependencies": {
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.9"
   }
 }

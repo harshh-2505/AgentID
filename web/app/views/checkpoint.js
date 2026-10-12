@@ -24,6 +24,10 @@ export function render(ctx) {
         h('span.label.kicker', {}, 'AgentID · identity and authority for autonomous agents'),
         h('h1', {}, 'Passport control for ', h('em', {}, 'software that acts on its own.')),
         h('p.lede', {}, 'Every request an agent makes stops here first. The authority checks which key signed it, what code is running, who allowed it and within what limits, and holds anything risky for a human co-sign. Watch the live traffic, or try to break it below.'),
+        h('div.hero-cta',
+          h('button.btn.tour-cta', { type: 'button', onClick: () => ctx.tour() }, h('span.play', { 'aria-hidden': 'true' }), 'Take the guided tour'),
+          h('span.dim', {}, '18 stops · about 3 minutes · arrow keys to move'),
+        ),
       ),
       h('div.factors',
         factor('Proof of key', 'Each request is signed by a key only the agent holds. Nothing to phish, nothing to replay.'),
@@ -59,27 +63,45 @@ export function render(ctx) {
       h('span.a-summary', {}, a.summary),
       expect,
     );
-    btn.addEventListener('click', async () => {
-      if (btn.disabled) return;
-      btn.disabled = true;
-      expect.textContent = 'Running…';
-      pinnedUntil = Date.now() + PIN_MS;
-      try {
-        const result = await ctx.run((b) => b.attack(a.id));
-        pinnedUntil = Date.now() + PIN_MS;
-        showDecision(result, true);
-        const where = result.checks.find((c) => c.status === 'fail' || c.status === 'hold');
-        expect.textContent = `${VERDICT[result.decision]}${where ? ' at ' + where.label.toLowerCase() : ''} · ✓`;
-        btn.classList.add('ran');
-        if (result.decision === 'step_up') toast(`${result.agentName}’s request is waiting in Co-sign.`);
-        deskEl.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
-      } catch (e) {
-        expect.textContent = 'Error: ' + e.message;
-      } finally {
-        btn.disabled = false;
-      }
-    });
+    btn.addEventListener('click', () => runAttack(a.id));
     return btn;
+  }
+
+  async function runAttack(id) {
+    const a = app.snap.world.attacks.find((x) => x.id === id);
+    const btn = root.querySelector(`[data-attack="${id}"]`);
+    const expect = btn?.querySelector('.a-expect');
+    if (btn?.disabled) return null;
+    if (btn) btn.disabled = true;
+    if (expect) expect.textContent = 'Running…';
+    pinnedUntil = Date.now() + PIN_MS;
+    try {
+      const result = await ctx.run((b) => b.attack(id));
+      pinnedUntil = Date.now() + PIN_MS;
+      showDecision(result, true);
+      const where = result.checks.find((c) => c.status === 'fail' || c.status === 'hold');
+      if (expect) expect.textContent = `${VERDICT[result.decision]}${where ? ' at ' + where.label.toLowerCase() : ''} · ✓`;
+      btn?.classList.add('ran');
+      if (result.decision === 'step_up' && !ctx.touring()) toast(`${result.agentName}’s request is waiting in Co-sign.`);
+      if (!ctx.touring()) deskEl.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
+      return result;
+    } catch (e) {
+      if (expect) expect.textContent = 'Error: ' + e.message;
+      throw e;
+    } finally {
+      if (btn) btn.disabled = false;
+      if (expect && a && !btn?.classList.contains('ran')) expect.textContent = a.expect;
+    }
+  }
+
+  // A routine, in-policy request, pinned to the desk.
+  async function runNormal() {
+    pinnedUntil = Date.now() + PIN_MS * 3;
+    let r = null;
+    for (let i = 0; i < 6 && r?.decision !== 'allow'; i++) r = await ctx.run((b) => b.tick());
+    pinnedUntil = Date.now() + PIN_MS * 3;
+    if (r) showDecision(r, true);
+    return r;
   }
 
   // ------------------------------------------------------------ desk
@@ -210,6 +232,7 @@ export function render(ctx) {
     if (last) showDecision(last, true);
   };
   root.refresh = () => updateTally();
+  root.api = { runAttack, runNormal, desk: deskEl };
   root.destroy = () => { off(); deskTl?.kill(); };
   return root;
 }

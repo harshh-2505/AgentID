@@ -41,15 +41,18 @@ I considered a browser extension, a desktop wallet and a pure SDK. An extension 
 - **Receipts, not sessions.** A cleared request yields a receipt signed by the authority, bound to that request. Services verify it offline and reject reuse.
 - **Cascading revocation.** Revoking an agent voids every sub-agent and mandate below it on the next request, and declines anything it had waiting.
 
+- **Keys are expected to fail.** Principals hold a key ring with roles (root, operational, approver); roots are replaced by a guardian quorum; agent keys are short-lived and superseded; one signature freezes everything.
+- **An observable authority.** The ledger is a Merkle log with checkpoints that independent witnesses co-sign, so the authority itself is accountable.
+- **Meet existing systems where they are.** MCP gateway, OAuth token exchange, SPIFFE, W3C credentials, Slack approvals, SIEM export, and federation between authorities.
+
 ## What is real in this build, and what is simulated
 
-**Real:** Ed25519 keys and signatures through WebCrypto, passport and mandate chain verification, attenuation, limits, budgets, rate limits, replay protection, co-sign with principal keys and guardian quorums, receipts, cascading revocation and the signed hash chain. The same code runs in the Node server and, for this hosted demo, inside your browser tab.
-**Simulated:** the runtime host measures a manifest object rather than producing a hardware attestation quote; the principal’s key lives in memory rather than in a passkey or secure enclave; the risk model is a transparent heuristic.
+**Real:** Ed25519 signatures, passport and mandate chains, attenuation, limits, budgets, rate limits, replay protection, co-sign with capped approver keys, passkeys and guardian quorums, key rotation and recovery, the kill switch, receipts, cascading revocation, the signed hash chain, Merkle checkpoints and witnesses, image signatures and Nitro attestation verification, the Postgres store, OIDC admission, the OAuth, SPIFFE and VC bridges, federation, the MCP gateway and the policy language. The same core runs in the Node server and, for the hosted demo, inside your browser tab.
+**Simulated in the demo:** the runtime host measures a manifest object rather than producing a hardware quote; passkeys fall back to a virtual authenticator when the page cannot reach a real one; the risk model is a transparent heuristic.
 
 ## Where it goes next
 
-- Passkey-backed co-sign, so approving a held request is a Face ID tap that produces a WebAuthn signature.
-- Hardware attestation from confidential computing hosts (AWS Nitro Enclaves, Azure and Google confidential VMs, NVIDIA confidential GPUs).
-- An MCP gateway that requires a receipt before any tool call, so every MCP server gets agent identity for free.
-- Bridges to existing standards: OAuth 2.0 token exchange (RFC 8693) for legacy APIs, SPIFFE for workload identity, W3C verifiable credentials for passports.
-- Federation between authorities, so one company’s agent can be recognised by another company’s services.
+- An external security audit, then a 1.0 protocol freeze.
+- More attestation formats: Azure and Google confidential VMs, NVIDIA confidential GPUs, TPM quotes.
+- Approval apps for phones that hold the approver key in the secure enclave.
+- Hosted witnesses run by independent parties, and a public log explorer.

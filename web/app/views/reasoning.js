@@ -42,19 +42,21 @@ const ESSAY = `
   <li><b>Explainable risk.</b> Risk is a list of named signals with points (first contact, bursts, unusual amounts, instruction-override language), so a person can see why something was held.</li>
   <li><b>Receipts, not sessions.</b> A cleared request yields a receipt signed by the authority, bound to that request. Services verify it offline and reject reuse.</li>
   <li><b>Cascading revocation.</b> Revoking an agent voids every sub-agent and mandate below it on the next request, and declines anything it had waiting.</li>
+  <li><b>Keys are expected to fail.</b> Principals hold a key ring with roles; a lost root is replaced by a guardian quorum; agent keys are short-lived; one signature freezes everything.</li>
+  <li><b>An observable authority.</b> The ledger is a Merkle log whose checkpoints independent witnesses co-sign, so the authority itself is accountable.</li>
+  <li><b>Meet existing systems where they are.</b> MCP gateway, OAuth token exchange, SPIFFE, W3C credentials, Slack approvals, SIEM export and federation.</li>
 </ul>
 
 <h2>What is real in this build, and what is <em>simulated</em></h2>
-<p><b>Real:</b> Ed25519 keys and signatures through WebCrypto, passport and mandate chain verification, attenuation, limits, budgets, rate limits, replay protection, co-sign with principal keys and guardian quorums, receipts, cascading revocation and the signed hash chain. The same code runs in the Node server and, for this hosted demo, inside your browser tab.</p>
-<p><b>Simulated:</b> the runtime host measures a manifest object rather than producing a hardware attestation quote; the principal’s key lives in memory rather than in a passkey or secure enclave; the risk model is a transparent heuristic.</p>
+<p><b>Real:</b> Ed25519 signatures, passport and mandate chains, attenuation, limits, budgets, rate limits, replay protection, co-sign with capped approver keys, passkeys and guardian quorums, key rotation and recovery, the kill switch, receipts, cascading revocation, the signed hash chain, Merkle checkpoints and witnesses, federation, the OAuth and credential bridges, the MCP gateway and the policy language. The same core runs in the Node server and, for this hosted demo, inside your browser tab.</p>
+<p><b>Simulated in this demo:</b> the runtime host measures a manifest object rather than producing a hardware quote (the server verifies AWS Nitro documents); passkeys fall back to a virtual authenticator when this page can’t reach a real one; the risk model is a transparent heuristic.</p>
 
 <h2>Where it goes <em>next</em></h2>
 <ul>
-  <li>Passkey-backed co-sign, so approving a held request is a Face ID tap that produces a WebAuthn signature.</li>
-  <li>Hardware attestation from confidential computing hosts (AWS Nitro Enclaves, Azure and Google confidential VMs, NVIDIA confidential GPUs).</li>
-  <li>An MCP gateway that requires a receipt before any tool call, so every MCP server gets agent identity for free.</li>
-  <li>Bridges to existing standards: OAuth 2.0 token exchange (RFC 8693) for legacy APIs, SPIFFE for workload identity, W3C verifiable credentials for passports.</li>
-  <li>Federation between authorities, so one company’s agent can be recognised by another company’s services.</li>
+  <li>An external security audit, then a 1.0 protocol freeze.</li>
+  <li>More attestation formats: confidential VMs, confidential GPUs, TPM quotes.</li>
+  <li>Phone approval apps that keep the approver key in the secure enclave.</li>
+  <li>Independent hosted witnesses and a public log explorer.</li>
 </ul>
 `;
 
@@ -62,7 +64,7 @@ export function render() {
   const root = h('div.reasoning',
     h('div.section-head',
       h('div',
-        h('span.label.kicker', {}, 'Reasoning'),
+        h('span.label.kicker', {}, 'Why it looks like this'),
         h('h1', {}, 'Identity for agents is ', h('em', {}, 'not'), ' identity for people.'),
       ),
       h('p', {}, 'How I approached the problem, what the product is, and why it is shaped this way.'),

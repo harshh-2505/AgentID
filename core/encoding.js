@@ -24,7 +24,7 @@ export const hex = (bytes) => Array.from(bytes, (b) => b.toString(16).padStart(2
 // AgentID is computed over this form so that two parties always hash the same bytes.
 export function canonical(value) {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
-  if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']';
+  if (Array.isArray(value)) return '[' + value.map((v) => (v === undefined ? 'null' : canonical(v))).join(',') + ']';
   return '{' + Object.keys(value)
     .filter((k) => value[k] !== undefined)
     .sort()

@@ -89,3 +89,9 @@ export function toast(msg) {
     else el.style.opacity = 0;
   }, 3200);
 }
+
+// replaceChildren that skips null/false, like h() does.
+export function fill(el, ...children) {
+  el.replaceChildren(...children.flat(Infinity).filter((c) => c !== null && c !== undefined && c !== false));
+  return el;
+}

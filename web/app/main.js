@@ -7,8 +7,11 @@ import * as mandates from './views/mandates.js';
 import * as cosign from './views/cosign.js';
 import * as ledger from './views/ledger.js';
 import * as reasoning from './views/reasoning.js';
+import * as keys from './views/keys.js';
+import * as integrations from './views/integrations.js';
+import { createTour } from './tour.js';
 
-const VIEWS = { checkpoint, registry, mandates, cosign, ledger, reasoning };
+const VIEWS = { checkpoint, registry, mandates, cosign, ledger, keys, integrations, reasoning };
 const TICK_MS = 2600;
 
 const app = {
@@ -37,6 +40,12 @@ const ctx = {
     const p = app.snap?.principals.find((x) => x.did === did);
     return p ? p.name : short(did);
   },
+  tour: (from) => app.tour?.start(from),
+  touring: () => !!app.tour?.active,
+  setLive: (on) => {
+    app.live = on;
+    $('#liveToggle').setAttribute('aria-pressed', String(on));
+  },
   // Runs a backend call with the live loop paused, so the result isn't buried.
   async run(fn) {
     app.busy = true;
@@ -56,6 +65,8 @@ async function boot() {
   wireChrome();
   route();
   window.addEventListener('hashchange', route);
+  app.tour = createTour(ctx);
+  if (new URLSearchParams(location.search).has('tour')) app.tour.start();
   setInterval(liveTick, TICK_MS);
 }
 
@@ -134,6 +145,12 @@ function updateChrome() {
   badge.hidden = pending === 0;
   if (badge.textContent !== String(pending) && pending && gsap && !reducedMotion()) gsap.fromTo(badge, { scale: 1.6 }, { scale: 1, duration: 0.4, ease: 'back.out(3)' });
   badge.textContent = pending;
+  const p = s.principals.find((x) => x.did === s.world?.principal.did);
+  const frozen = !!p?.frozen;
+  if ($('#app').classList.contains('is-frozen') !== frozen) {
+    $('#app').classList.toggle('is-frozen', frozen);
+    if (frozen && gsap && !reducedMotion()) gsap.fromTo('#freezeBanner', { scale: 1.4 }, { scale: 1, duration: 0.5, ease: 'back.out(3)' });
+  }
   $('#modeLabel').textContent = app.backend.mode === 'server' ? 'Node server' : 'In this tab';
   $('#modeChip').title = app.backend.mode === 'server'
     ? 'The authority runs in the Node server; this console talks to it over HTTP and server-sent events.'
@@ -172,6 +189,8 @@ function wireChrome() {
     live.setAttribute('aria-pressed', String(app.live));
     toast(app.live ? 'Live traffic resumed.' : 'Live traffic paused. Attacks still run on demand.');
   });
+  $('#tourBtn').addEventListener('click', () => (app.tour.active ? app.tour.stop() : app.tour.start()));
+  $('#freezeBanner').addEventListener('click', () => ctx.go('keys'));
   const uv = $('#uvToggle');
   uv.setAttribute('aria-pressed', String(isDark()));
   uv.addEventListener('click', () => {

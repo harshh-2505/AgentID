@@ -2,6 +2,7 @@
 
 import { h, gsap, reducedMotion, money, ago, paramsLine, short, toast } from '../dom.js';
 import { sigil } from '../sigil.js';
+import * as passkey from '../passkey.js';
 
 export function render(ctx) {
   const { app } = ctx;
@@ -47,9 +48,11 @@ export function render(ctx) {
   function card(ap) {
     const principal = app.snap.world.principal;
     const actions = h('div.request-actions');
-    const sign = h('button.btn', { type: 'button' }, 'Co-sign');
+    const keyName = ap.amount > 2000 ? 'operational key' : 'Okafor’s phone key';
+    const sign = h('button.btn', { type: 'button' }, ap.passkey ? 'Approve with passkey' : `Co-sign with ${keyName}`);
+    const viaPasskey = ap.passkey ? null : h('button.btn.ghost', { type: 'button' }, 'Approve with passkey');
     const decline = h('button.btn.ghost', { type: 'button' }, 'Decline');
-    actions.append(sign, decline);
+    actions.append(...[sign, viaPasskey, decline].filter(Boolean));
     const el = h('article.sheet.request', { 'data-id': ap.id },
       h('div.request-head',
         sigil(ap.agent, 44),
@@ -70,31 +73,32 @@ export function render(ctx) {
           h('span.pts', {}, '+' + f.points),
         )),
       ) : null,
-      h('p.signing-note', {}, `Co-signing creates an Ed25519 signature by ${principal.name} (key ${short(principal.did)}) over request hash ${ap.intentHash.slice(0, 16)}…. It cannot be reused for any other request.`),
+      h('p.signing-note', {}, `Co-signing creates a signature by ${principal.name} over request hash ${ap.intentHash.slice(0, 16)}…, with the ${keyName} (an approver key may sign up to $2,000) or a passkey verified by fingerprint or face. It cannot be reused for any other request.`),
       actions,
     );
-    const go = async (decision) => {
-      sign.disabled = decline.disabled = true;
+    const go = async (decision, withPasskey = false) => {
+      for (const b of actions.children) b.disabled = true;
       animating = true;
       try {
-        const r = await ctx.run((b) => b.approve(ap.id, decision));
+        const r = await ctx.run((b) => (withPasskey ? passkey.decide(b, app.snap, ap.id, decision) : b.approve(ap.id, decision)));
         const stamp = h('div.stamp.' + (r.status === 'approved' ? 'allow' : 'deny'), {}, r.status === 'approved' ? 'Co-signed' : 'Declined');
         el.append(stamp);
         if (gsap && !reducedMotion()) {
           await gsap.fromTo(stamp, { scale: 2.4, opacity: 0, rotation: -24 }, { scale: 1, opacity: 0.9, rotation: -9, duration: 0.26, ease: 'power4.in' });
           await gsap.to(el, { opacity: 0, y: -10, duration: 0.35, delay: 0.5 });
         }
-        toast(r.status === 'approved' ? `${ap.agentName} received a signed receipt and the action ran.` : `Declined. ${ap.agentName} was told no, and the held budget was released.`);
+        toast(r.status === 'approved' ? `${ap.agentName} received a signed receipt and the action ran.${r.decision?.checks?.at(-1)?.detail?.includes('passkey') ? ' Approved with a passkey.' : ''}` : `Declined. ${ap.agentName} was told no, and the held budget was released.`);
         animating = false;
         await ctx.refresh();
         draw(false);
       } catch (e) {
         animating = false;
         toast(e.message);
-        sign.disabled = decline.disabled = false;
+        for (const b of actions.children) b.disabled = false;
       }
     };
-    sign.addEventListener('click', () => go('approve'));
+    sign.addEventListener('click', () => go('approve', !!ap.passkey));
+    viaPasskey?.addEventListener('click', () => go('approve', true));
     decline.addEventListener('click', () => go('decline'));
     return el;
   }

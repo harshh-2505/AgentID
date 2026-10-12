@@ -6,6 +6,8 @@ import {
 } from '../core/index.js';
 import { DemoWorld, ATTACKS } from '../core/demo-world.js';
 
+const spendOf = (A, id) => A.store.read((tx) => tx.get('spend', id));
+
 async function setup({ cosign = { above: 500 }, quorum } = {}) {
   const A = await Authority.create();
   const org = await Principal.create({ name: 'Acme' });
@@ -116,23 +118,23 @@ test('co-sign: hold, approve with principal key, receipt carries cosigner', asyn
   const { A, org, agent } = await setup();
   const r = await A.verifyIntent(await pay(agent, 700));
   assert.equal(r.decision, 'step_up');
-  const ap = A.s.approvals[r.approvalId];
-  assert.equal(A.s.spend[agent.mandate.id].reserved, 700);
+  const ap = await A.approval(r.approvalId);
+  assert.equal((await spendOf(A, agent.mandate.id)).reserved, 700);
   const stranger = await Principal.create({ name: 'Stranger' });
   await assert.rejects(A.resolveApproval(await stranger.cosign(ap)), /not allowed/);
   const done = await A.resolveApproval(await org.cosign(ap));
   assert.equal(done.status, 'approved');
   assert.equal(done.decision.decision, 'allow');
   assert.deepEqual(done.decision.receipt.cosigners, [org.did]);
-  assert.equal(A.s.spend[agent.mandate.id].spent, 700);
-  assert.equal(A.s.spend[agent.mandate.id].reserved, 0);
+  assert.equal((await spendOf(A, agent.mandate.id)).spent, 700);
+  assert.equal((await spendOf(A, agent.mandate.id)).reserved, 0);
 });
 
 test('co-sign: guardian quorum of 2 of 3', async () => {
   const guardians = await Promise.all([1, 2, 3].map(() => Principal.create({ name: 'g' })));
   const { A, agent } = await setup({ quorum: { k: 2, of: guardians.map((g) => g.did) } });
   const r = await A.verifyIntent(await pay(agent, 600));
-  const ap = A.s.approvals[r.approvalId];
+  const ap = await A.approval(r.approvalId);
   assert.equal((await A.resolveApproval(await guardians[0].cosign(ap))).status, 'pending');
   assert.equal((await A.resolveApproval(await guardians[2].cosign(ap))).status, 'approved');
 });
@@ -150,7 +152,7 @@ test('revocation cascades to sub-agents and pending approvals', async () => {
   assert.equal(held.decision, 'step_up');
   const res = await A.revoke(await org.revoke(agent.did, 'key compromise'));
   assert.equal(res.agents.length, 2);
-  assert.equal(A.s.approvals[held.approvalId].status, 'declined');
+  assert.equal((await A.approval(held.approvalId)).status, 'declined');
   assert.equal((await A.verifyIntent(await pay(sub, 50))).failedAt, 'identity');
   const outsider = await Principal.create({ name: 'x' });
   await assert.rejects(A.revoke(await outsider.revoke(sub.did)), /issuer/);
@@ -162,7 +164,7 @@ test('ledger: chain verifies, and any edit is detected', async () => {
   await A.verifyIntent(await pay(agent, 20));
   const ok = await A.verifyLedger();
   assert.ok(ok.ok);
-  const copy = structuredClone(A.ledger.entries);
+  const copy = structuredClone(await A.ledgerEntries({ limit: 1000 }));
   copy[3].data.amount = 1;
   const bad = await verifyChain(copy, A.did);
   assert.equal(bad.ok, false);
@@ -181,20 +183,31 @@ test('authority state survives export and restore', async () => {
 test('demo world: every scripted attack lands where the console says it will', async () => {
   const w = await DemoWorld.create();
   for (let i = 0; i < 12; i++) await w.tick();
-  const expected = { cosign: ['step_up', 'cosign'], replay: ['deny', 'freshness'], forged: ['deny', 'signature'], injection: ['deny', 'limits'], subtle: ['step_up', 'cosign'], tamper: ['deny', 'runtime'], escalate: ['deny', 'scope'], runaway: ['deny', 'budget'] };
-  for (const a of ATTACKS) {
+  const expected = {
+    cosign: ['step_up', 'cosign'], replay: ['deny', 'freshness'], forged: ['deny', 'signature'], injection: ['deny', 'limits'],
+    subtle: ['step_up', 'cosign'], tamper: ['deny', 'runtime'], escalate: ['deny', 'scope'], runaway: ['deny', 'budget'],
+    leaked: ['deny', 'identity'], frozen: ['deny', 'identity'],
+  };
+  assert.deepEqual(Object.keys(expected).sort(), ATTACKS.map((a) => a.id).sort());
+  for (const a of ATTACKS.filter((x) => x.id !== 'frozen')) {
     const r = await w.attack(a.id);
     assert.deepEqual([r.decision, r.failedAt], expected[a.id], `${a.id}: ${JSON.stringify(r.checks.filter((c) => c.status !== 'pass'))}`);
   }
-  const pending = w.snapshot().approvals.filter((x) => x.status === 'pending');
+  const pending = (await w.snapshot()).approvals.filter((x) => x.status === 'pending');
   assert.equal(pending.length, 2);
-  const res = await w.approve(pending[0].id);
-  assert.equal(res.status, 'approved');
+  const res = await w.approve(pending.find((p) => p.agentName === 'Ledgerline').id);
+  assert.equal(res.status, 'approved', res.decision?.checks?.at(-1)?.detail);
+  const fr = await w.attack('frozen');
+  assert.deepEqual([fr.decision, fr.failedAt], expected.frozen);
+  assert.match(fr.checks.find((c) => c.key === 'identity').detail, /froze/);
+  assert.equal((await w.snapshot()).approvals.filter((x) => x.status === 'pending').length, 0, 'freezing declines what was waiting');
+  assert.equal((await w.tick())?.decision !== undefined, true, 'unfrozen again afterwards');
   const wide = await w.delegate({ caps: [{ action: 'payments.send', resource: 'vendor:*', limits: { amount: { max: 5000 }, currency: { in: ['USD'] } } }] });
   assert.equal(wide.ok, false);
   const rev = await w.revoke('ledgerline', 'test');
   assert.equal(rev.agents.length, 2);
   assert.ok((await w.verifyLedger()).ok);
   const restored = await DemoWorld.restore(JSON.parse(JSON.stringify(w.export())));
-  assert.equal(restored.statusOfAgent('quill'), 'revoked');
+  assert.equal(await restored.statusOfAgent('quill'), 'revoked');
+  assert.equal(await restored.statusOfAgent('courier'), 'active');
 });
