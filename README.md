@@ -16,26 +16,45 @@ The full reasoning is in [docs/THESIS.md](docs/THESIS.md) and in the console's *
 ## What's in the box
 
 ```
-core/       the protocol, zero dependencies, runs in Node 20+ and in browsers
-  keys.js         Ed25519 via WebCrypto, self-certifying did:agentid identifiers
-  policy.js       capabilities, limits, attenuation checks
-  actors.js       Principal, Attestor (runtime host), AgentRuntime
-  authority.js    registry, 10-step verifier, risk, co-sign, revocation, receipts
-  ledger.js       signed hash-chained decision log + verifier
-  demo-world.js   a sample organisation, background traffic and 8 attacks
-server/     the authority as an HTTP service (zero dependencies)
-sdk/        what agents, approval apps and services import
-examples/   an autonomous agent and a payments service that requires receipts
-web/        the console (vanilla JS + GSAP)
-test/       node:test suite
+core/         the protocol, zero dependencies, runs in Node 20+ and in browsers
+  keys.js           Ed25519 via WebCrypto, did:agentid identifiers, ExternalSigner for KMS/Vault
+  policy.js         capabilities, limits, attenuation checks
+  actors.js         Principal (key ring, recovery, freeze), Attestor, AgentRuntime (rotation)
+  authority.js      registry, 10-step verifier, risk, co-sign, passkeys, revocation, receipts,
+                    key updates, kill switch, Merkle checkpoints, witnesses, federation
+  store.js          storage interface + transactional in-memory store
+  merkle.js         RFC 9162 Merkle tree: inclusion and consistency proofs
+  webauthn.js       passkey registration and assertion verification (CBOR, COSE)
+  attestation.js    runtime evidence formats, cosign (Sigstore) image signatures
+  federation.js     trust bundles and federated receipt checks
+  oauth.js          RFC 8693 token exchange, RFC 9068 JWTs, SPIFFE JWT-SVIDs, JWKS
+  vc.js             W3C VC 2.0 export (eddsa-jcs-2022, did:key)
+  demo-world.js     the demo organisation, a partner org, traffic and 10 attacks
+server/       the authority as an HTTP service
+  server.js         routes, demo and production modes
+  auth.js           sign-up gate: OIDC ID tokens (JWKS), admin token
+  keystore.js       authority key: encrypted file (AES-GCM + scrypt) or Vault transit
+  store/postgres.js Postgres store, safe across many authority processes
+  attestation/nitro.js  AWS Nitro Enclaves attestation documents
+  witness.js, witness-cli.js  independent checkpoint witness
+  integrations/     Slack and Teams co-sign, SIEM export (webhook, Splunk HEC, OTLP)
+gateway/      MCP gateway: Streamable HTTP proxy and stdio wrapper
+policy/       policy-as-code language, linter, semantic diff, CLI
+sdk/          JS SDK and tool wrappers (sdk/adapters.js)
+sdk-python/   Python SDK and @guard decorator, cross-tested against the JS code
+examples/     an autonomous agent, a relying service, framework snippets
+web/          the console (vanilla JS + GSAP) with a guided tour
+test/         node:test suite (unit, property-based, cross-language, Postgres, Nitro)
+docs/         THESIS, THREAT_MODEL, DEPLOY
 ```
 
 ## Run it
 
-Requires Node 20 or newer. There is nothing to install.
+Requires Node 20 or newer. The authority itself has no runtime dependencies; `npm install` only adds `pg` (optional, for Postgres) and PGlite (tests).
 
 ```bash
-npm test          # 13 tests: crypto, attenuation, budgets, co-sign, quorum, revocation, ledger, every attack
+npm install
+npm test          # 93 tests: protocol, attacks, keys, passkeys, Merkle, Postgres, Nitro, OAuth, VC, MCP, policy, fuzzing, Python interop
 npm start         # authority + console on http://localhost:4600
 ```
 
@@ -67,14 +86,18 @@ The console also runs with no server at all: open it from any static host (or ad
 
 ## The console
 
+Press **Tour** (or open the console with `?tour`) for a guided, 18-stop walk through everything below. Each stop runs a real action against the authority and spotlights the result.
+
 | Tab | What you can do |
 | --- | --- |
-| Checkpoint | Watch live traffic go through the ten checks, then run any of the eight attacks: large payment, replay, stolen identity, prompt-injected exfiltration, subtle injection, tampered runtime, sub-agent escalation, runaway loop. |
+| Checkpoint | Watch live traffic go through the ten checks, then run any of the ten attacks: large payment, replay, stolen identity, prompt-injected exfiltration, subtle injection, tampered runtime, sub-agent escalation, runaway loop, leaked old key, and the kill switch. |
 | Passports | The trust graph and each agent's passport, with a key-derived guilloche face and an ICAO-style machine readable zone. Revoke an agent and watch the cascade. |
 | Mandates | Every grant, with live budget meters. Try a delegation from Ledgerline to its sub-agent; the authority refuses anything wider than the parent. |
-| Co-sign | Held requests with the reasons and risk signals. Co-signing produces a real Ed25519 signature over the request hash. |
+| Co-sign | Held requests with the reasons and risk signals. Approve with the finance lead's capped approver key or with a passkey. |
 | Ledger | The signed hash chain. Edit an entry in your view and the verifier names the exact entry where it breaks. |
-| Reasoning | Why the product is shaped this way. |
+| Keys | The kill switch, passkeys, the principal's key ring (root, operational, approver), 2-of-3 guardian recovery, agent key rotation, and Merkle checkpoints co-signed by a witness. |
+| Stack | Live demos of the MCP gateway, OAuth token exchange and SPIFFE, W3C credentials, federation with a partner org, Slack co-sign, SIEM records, the policy language with a widening diff, and SDK snippets. |
+| Why | Why the product is shaped this way. |
 
 *UV light* switches to the dark theme, styled as the passport under UV inspection.
 
@@ -92,9 +115,22 @@ All bodies are signed JSON objects (`proof: { alg: "Ed25519", kid: <did>, sig }`
 | POST | `/v1/intents` | `Intent`, signed by the agent; returns the decision, the trace and, when cleared, a `Receipt` |
 | GET | `/v1/approvals/:id` | status of a held request (and its receipt once co-signed) |
 | GET | `/v1/approvals/:id/request` | the full held request, for an approval app |
-| POST | `/v1/approvals/:id/cosign` | `CoSign`, signed by the principal or a guardian |
+| POST | `/v1/approvals/:id/cosign` | `CoSign` signed by a principal key or a guardian, or `PasskeyCoSign` (a WebAuthn assertion) |
 | POST | `/v1/revocations` | `Revocation`, signed by an issuer up the chain |
+| POST | `/v1/principals/:did/keys` | `KeyUpdate` plus approvals: one root signature, or k recovery-guardian signatures |
+| POST | `/v1/principals/:did/freeze` | `Freeze` (kill switch on or off), signed by a root or operational key |
+| POST | `/v1/principals/:did/passkeys` | `PasskeyEnrollment`: a WebAuthn registration, signed by the principal |
+| POST | `/v1/publishers` | `PublisherEndorsement`: a cosign key allowed to sign the principal's images |
+| POST | `/v1/federation` | `Federation`: accept a partner authority's `TrustBundle` for named actions |
+| POST | `/v1/federation/receipts` | check a partner's receipt against the agreements |
+| GET | `/v1/trust-bundle` | this authority's signed trust bundle |
 | GET | `/v1/ledger`, `/v1/ledger/verify` | entries, and a full recomputation |
+| GET | `/v1/checkpoint`, `/v1/proofs/inclusion`, `/v1/proofs/consistency` | signed Merkle checkpoint and proofs |
+| POST | `/v1/witness` | a witness co-signature on a checkpoint |
+| GET | `/v1/passports/:id/credential` | the passport as a W3C Verifiable Credential |
+| POST | `/oauth/token` | RFC 8693 token exchange: receipt or intent → access token or JWT-SVID |
+| GET | `/.well-known/jwks.json`, `/.well-known/oauth-authorization-server`, `/.well-known/spiffe-bundle` | keys and metadata for OAuth and SPIFFE |
+| POST | `/integrations/slack/actions`, `/integrations/teams/actions` | interactive co-sign callbacks |
 
 SDK in one screen:
 
@@ -118,15 +154,22 @@ const result = await client.act(agent, { action: 'payments.send', resource: 'ven
 app.use(requireReceipt({ authority: authorityDid, aud: 'payments', expect: (req, r) => … }));
 ```
 
+## Adopting it
+
+- **MCP:** `node gateway/cli.js --agent scout.json --authority https://… --stdio "npx -y @modelcontextprotocol/server-github"` puts any MCP server behind the checkpoint; the model never sees the agent's key.
+- **Your own tools:** wrap them with `withAgentID` (JS, `sdk/adapters.js`) or `@guard` (Python, `sdk-python`). Snippets for LangGraph, the OpenAI Agents SDK, the Claude Agent SDK and CrewAI are in `examples/frameworks/`.
+- **Existing APIs:** exchange a receipt at `/oauth/token` and send the JWT; the API verifies it with the JWKS like any other OAuth token.
+- **Mandates in review:** keep them in `.agentid` files; `node policy/cli.js diff old new` exits 2 when authority widens, which makes a CI gate.
+
+## Running it in production
+
+See [docs/DEPLOY.md](docs/DEPLOY.md). In short: `AGENTID_MODE=production`, a sign-up gate (`AGENTID_OIDC_ISSUER` or `AGENTID_ADMIN_TOKEN`), the authority key in an encrypted file or Vault, and `AGENTID_DATABASE_URL` for Postgres so several authority processes can share one database without double-spending a budget or accepting a replay twice. The security design and its limits are in [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md); how to report a vulnerability is in [SECURITY.md](SECURITY.md).
+
 ## What is real and what is simulated
 
-Real: Ed25519 signatures through WebCrypto, passport and mandate chain verification, attenuation, limits, cumulative budgets across sub-agents, rate limits, replay protection, co-sign by principal or guardian quorum, offline-verifiable receipts, cascading revocation, and the signed hash chain.
+Real: Ed25519 signatures, passport and mandate chain verification, attenuation, limits, cumulative budgets, rate limits, replay protection, co-sign by principal keys, capped approver keys, passkeys (WebAuthn verification of real authenticators) and guardian quorums, key rotation and guardian recovery, the kill switch, offline-verifiable receipts, cascading revocation, the signed hash chain, Merkle checkpoints with consistency proofs and witnesses, cosign image signatures, Nitro attestation document verification, OIDC admission, the encrypted key file and Vault signer, the Postgres store, OAuth/SPIFFE tokens, W3C credentials, federation, the MCP gateway and the policy language. All of it is covered by tests.
 
-Simulated: the runtime host measures a manifest object instead of producing a hardware attestation quote; principal keys live in memory instead of a passkey or secure enclave; the risk model is a transparent heuristic; principal registration is open (in production it sits behind the organisation's SSO).
-
-## Next steps
-
-Passkey-backed co-sign (WebAuthn), confidential-computing attestation (Nitro Enclaves, confidential VMs and GPUs), an MCP gateway that requires a receipt per tool call, bridges to OAuth token exchange (RFC 8693), SPIFFE and W3C verifiable credentials, and federation between authorities.
+Simulated in the demo: the runtime host attests a manifest hash instead of a hardware quote (the Nitro verifier exists, but the demo has no enclave); in the hosted demo, passkeys fall back to a virtual authenticator when the page can't reach a real one; the risk model is a transparent heuristic; the Slack card in the console is a preview of the real message. No external security audit has been done yet.
 
 ## Credits
 

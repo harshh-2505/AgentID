@@ -2,7 +2,7 @@
 // Key ring, guardian recovery, passkeys, short-lived agent keys, the kill switch,
 // and the transparency checkpoint that independent witnesses co-sign.
 
-import { h, s, gsap, reducedMotion, ago, clock, short, toast } from '../dom.js';
+import { h, s, fill, gsap, reducedMotion, ago, clock, short, toast } from '../dom.js';
 import { sigil } from '../sigil.js';
 import * as passkey from '../passkey.js';
 
@@ -77,7 +77,7 @@ export function render(ctx) {
       if (gsap && !reducedMotion()) gsap.fromTo('#app', { filter: r.frozen ? 'hue-rotate(-30deg) saturate(1.8)' : 'brightness(1.4)' }, { filter: 'none', duration: 0.8, clearProps: 'filter' });
     }));
     switchEl.classList.toggle('frozen', frozen);
-    switchEl.replaceChildren(
+    fill(switchEl, 
       h('div.ks-copy',
         h('span.label', {}, 'Kill switch'),
         h('h2', {}, frozen ? 'All agents are frozen.' : 'One signature stops everything.'),
@@ -96,13 +96,16 @@ export function render(ctx) {
   function drawPasskeys() {
     const p = principal();
     const virtualIds = new Set(app.snap.world.virtualPasskeys || []);
-    const enrollBtn = h('button.btn', { type: 'button' }, p.passkeys.length ? 'Enroll another passkey' : 'Enroll a passkey');
-    enrollBtn.addEventListener('click', () => act(enrollBtn, (b) => passkey.enroll(b), (r) => {
-      toast(r.virtual ? 'Enrolled the virtual authenticator: this frame can’t reach a real passkey.' : 'Passkey enrolled. Approvals can now require your fingerprint or face.');
+    const enrollBtn = h('button.btn', { type: 'button' }, 'Use this device’s passkey');
+    const virtualBtn = h('button.btn.ghost', { type: 'button' }, 'Use a virtual authenticator');
+    const enrolled = (r) => {
+      toast(r.virtual ? 'Virtual authenticator enrolled. It produces the same WebAuthn signatures a phone would.' : 'Passkey enrolled. Approvals can now require your fingerprint or face.');
       const last = passEl.querySelector('.pk-row:last-of-type');
       if (last && gsap && !reducedMotion()) gsap.from(last, { x: -20, opacity: 0, duration: 0.5, ease: 'power3.out' });
-    }));
-    passEl.replaceChildren(
+    };
+    enrollBtn.addEventListener('click', () => act(enrollBtn, (b) => passkey.enroll(b), enrolled));
+    virtualBtn.addEventListener('click', () => act(virtualBtn, (b) => passkey.enroll(b, { virtual: true }), enrolled));
+    fill(passEl, 
       h('span.label', {}, 'Passkeys'),
       h('h2', {}, 'Approvals your phone has to sign.'),
       h('p.note', {}, 'An agent can read a one-time code. It cannot press your fingerprint. Each approval is a WebAuthn signature over the hash of that exact request, so a phished or replayed approval is useless.'),
@@ -113,7 +116,7 @@ export function render(ctx) {
           h('span.tag', {}, k.uv === false ? 'presence' : 'user verified'),
         )))
         : h('p.empty-inline', {}, 'No passkeys yet.'),
-      h('div.row-actions', enrollBtn),
+      h('div.row-actions', enrollBtn, virtualBtn),
     );
   }
 
@@ -127,7 +130,7 @@ export function render(ctx) {
       animateNewest();
     }));
     const keys = [...p.keys].sort((a, b) => (a.removedAt ? 1 : 0) - (b.removedAt ? 1 : 0) || a.addedAt - b.addedAt);
-    ringEl.replaceChildren(
+    fill(ringEl, 
       h('span.label', {}, 'Key ring · Northwind Labs'),
       h('h2', {}, 'One identity, many keys.'),
       h('p.note', {}, `The organisation’s identifier never changes (${short(p.did)}); the keys behind it do. Each key has a role, so the key on a finance lead’s phone can approve a payment but can never issue a mandate.`),
@@ -163,8 +166,8 @@ export function render(ctx) {
     const g = app.snap.world.guardians || [];
     const k = p.recovery?.k ?? 2;
     const recover = h('button.btn.ghost', { type: 'button' }, 'Lose the root key');
-    const size = 220;
-    const r = 78;
+    const size = 300;
+    const r = 96;
     const ring = s('svg.quorum', { viewBox: `0 0 ${size} ${size}`, width: size, height: size, 'aria-hidden': 'true' },
       s('circle.q-track', { cx: size / 2, cy: size / 2, r }),
       s('circle.q-fill', { cx: size / 2, cy: size / 2, r, 'stroke-dasharray': 2 * Math.PI * r, 'stroke-dashoffset': 2 * Math.PI * r }),
@@ -179,7 +182,7 @@ export function render(ctx) {
       toast(`${res.guardians.join(' and ')} signed. The lost root key is marked compromised and a new root key took its place.`);
       animateRecovery();
     }));
-    guardEl.replaceChildren(
+    fill(guardEl, 
       h('span.label', {}, 'Recovery'),
       h('h2', {}, 'Lost root key? Ask the guardians.'),
       h('p.note', {}, `No helpdesk reset, no single point of failure. Any ${k} of these ${g.length} guardians can sign a key update that retires the lost root key and installs a new one. Everything the lost key signed is distrusted.`),
@@ -208,7 +211,7 @@ export function render(ctx) {
   function drawAgents() {
     const agents = app.snap.world.agents;
     const leaked = app.snap.world.leaked;
-    agentEl.replaceChildren(
+    fill(agentEl, 
       h('span.label', {}, 'Agent keys'),
       h('h2', {}, 'Short-lived by design.'),
       h('p.note', {}, 'An agent’s key lives as long as its job. Rotating issues a new key and a passport that supersedes the old one; the old passport is retired automatically, so a key copied from a log file last week opens nothing.'),
@@ -256,7 +259,7 @@ export function render(ctx) {
       }
     });
     const d = proofData || lastWitness;
-    transEl.replaceChildren(
+    fill(transEl, 
       h('span.label', {}, 'Transparency'),
       h('h2', {}, 'A log the authority can’t quietly rewrite.'),
       h('p.note', {}, 'The ledger is also a Merkle tree, like Certificate Transparency. The authority signs checkpoints; independent witnesses co-sign only checkpoints that extend what they saw before. A service can check that its receipt is in the log with a handful of hashes.'),
@@ -270,7 +273,7 @@ export function render(ctx) {
     const cp = d.checkpoint;
     const inc = d.inclusion;
     const levels = inc ? inc.proof.length : 0;
-    const W = 520;
+    const W = 560;
     const rowH = 34;
     const H = (levels + 2) * rowH + 10;
     const svg = s('svg.merkle', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': `Inclusion proof with ${levels} hashes` });
@@ -280,7 +283,7 @@ export function render(ctx) {
       const y = H - 18 - i * rowH;
       pts.push([x, y]);
       if (i < levels) {
-        const side = (i % 2 ? -1 : 1) * (60 + i * 6);
+        const side = (i % 2 ? -1 : 1) * 150;
         svg.append(s('line.m-edge', { x1: x, y1: y, x2: x, y2: y - rowH }));
         svg.append(s('line.m-sib-edge', { x1: x + side, y1: y, x2: x, y2: y - rowH }));
         svg.append(s('rect.m-sib', { x: x + side - 46, y: y - 9, width: 92, height: 18, rx: 2 }));

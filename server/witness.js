@@ -64,6 +64,8 @@ export async function createWitness({ signer, name = 'witness', store = 'memory'
         // An older checkpoint replayed to us is harmless; a newer one that shrank is a rollback.
         if (cp.ts > prev.ts) await alarm('rollback', `log shrank from ${prev.size} to ${cp.size}`, prev, cp);
         throw httpError(409, `already co-signed size ${prev.size}; this checkpoint is older`);
+      } else if (prev.size > 0 && !proof.length) {
+        throw httpError(400, `a consistency proof from size ${prev.size} is required`);
       } else if (prev.size > 0 && !(await verifyConsistency(prev.size, cp.size, prev.root, cp.root, proof))) {
         await alarm('fork', `size ${cp.size} does not extend the co-signed size ${prev.size}`, prev, cp);
       }

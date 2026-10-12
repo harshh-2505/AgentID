@@ -26,7 +26,7 @@ export function render(ctx) {
         h('p.lede', {}, 'Every request an agent makes stops here first. The authority checks which key signed it, what code is running, who allowed it and within what limits, and holds anything risky for a human co-sign. Watch the live traffic, or try to break it below.'),
         h('div.hero-cta',
           h('button.btn.tour-cta', { type: 'button', onClick: () => ctx.tour() }, h('span.play', { 'aria-hidden': 'true' }), 'Take the guided tour'),
-          h('span.dim', {}, '17 stops · about 3 minutes · arrow keys to move'),
+          h('span.dim', {}, '18 stops · about 3 minutes · arrow keys to move'),
         ),
       ),
       h('div.factors',

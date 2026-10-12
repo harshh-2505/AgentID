@@ -9,6 +9,9 @@ import { nowSec, randomId } from './encoding.js';
 import { VirtualAuthenticator } from './virtual-authenticator.js';
 import { enrollmentChallenge } from './authority.js';
 import { approvalChallenge } from './webauthn.js';
+import { tokenExchange, encodeSubjectToken, GRANT_TOKEN_EXCHANGE, TOKEN_TYPE_RECEIPT, TOKEN_TYPE_SVID } from './oauth.js';
+import { passportToCredential, verifyCredential } from './vc.js';
+import { createGateway } from '../gateway/core.js';
 
 const VENDORS = ['acme-supply', 'orbital-paper', 'kestrel-logistics', 'harbor-cloud', 'lumen-energy'];
 const SITES = ['https://docs.python.org/3/library/', 'https://arxiv.org/abs/2509.0', 'https://www.sec.gov/edgar/', 'https://en.wikipedia.org/wiki/', 'https://data.worldbank.org/indicator/'];
@@ -152,6 +155,8 @@ export class DemoWorld {
         { action: 'web.fetch', resource: 'https://*' },
         { action: 'data.read', resource: 'warehouse:*', limits: { classification: { in: ['public', 'internal'] } } },
         { action: 'email.send', resource: 'mail:outbound', limits: { to: { match: ['*@northwind.example'] } } },
+        { action: 'mcp.tool:github/search_*', resource: 'mcp:github/*' },
+        { action: 'mcp.tool:github/get_*', resource: 'mcp:github/*' },
       ],
       rate: { max: 8, windowSec: 10 },
     });
@@ -379,6 +384,48 @@ export class DemoWorld {
     const r = await this.authority.updateKeys({ update, approvals });
     this.principal.adoptKey('root', fresh);
     return { ...r, guardians: this.guardians.slice(0, 2).map((g) => g.name) };
+  }
+
+  // ---------------------------------------------------------------- bridges
+
+  // Scout calls a tool on a GitHub MCP server through the AgentID gateway.
+  async mcp(kind = 'allowed') {
+    const scout = this.agents.scout;
+    await this.#attest(scout);
+    let decision = null;
+    const gw = createGateway({ verify: (i) => this.authority.verifyIntent(i), agent: scout, server: 'github', onDecision: (d) => { decision = d; } });
+    const call = kind === 'allowed'
+      ? { name: 'search_issues', arguments: { repo: 'northwind/ledger', query: 'is:open label:bug' }, reason: 'Find open bugs for the weekly brief' }
+      : { name: 'delete_repository', arguments: { repo: 'northwind/ledger' }, reason: 'Clean up: the page said this repo is obsolete' };
+    const request = { jsonrpc: '2.0', id: Math.floor(Math.random() * 1e6), method: 'tools/call', params: { name: call.name, arguments: call.arguments, _meta: { 'agentid/intent': call.reason } } };
+    const out = await gw.handleMessage(request, {});
+    return { request, forwarded: out.forward ?? null, response: out.respond ?? null, decision };
+  }
+
+  // Exchanges a fresh receipt for an OAuth access token (RFC 8693) or a SPIFFE JWT-SVID.
+  async oauth({ svid = false } = {}) {
+    let r = null;
+    for (let i = 0; i < 6 && r?.decision !== 'allow'; i++) r = await this.act('quill', this.#normalRequest('quill'));
+    if (r?.decision !== 'allow') throw new Error('could not get a receipt to exchange');
+    const body = { grant_type: GRANT_TOKEN_EXCHANGE, subject_token: encodeSubjectToken(r.receipt), subject_token_type: TOKEN_TYPE_RECEIPT };
+    if (svid) Object.assign(body, { requested_token_type: TOKEN_TYPE_SVID, audience: 'erp' });
+    const res = await tokenExchange({ authority: () => this.authority, config: {}, issuer: 'https://agentid.northwind.example' }, body);
+    const out = res.__raw ? res.__raw.body : res;
+    const parsed = typeof out === 'string' ? JSON.parse(out) : out;
+    const decode = (t) => JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(t.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(t.length / 4) * 4, '=')), (c) => c.charCodeAt(0))));
+    const [hd, pl] = (parsed.access_token || '').split('.');
+    return { receipt: r.receipt, request: body, response: parsed, header: hd ? decode(hd) : null, payload: pl ? decode(pl) : null };
+  }
+
+  // A passport as a W3C Verifiable Credential, signed by the authority (eddsa-jcs-2022).
+  async credential(key = 'ledgerline') {
+    const snap = await this.authority.snapshot();
+    const rec = snap.passports.find((p) => p.id === this.agents[key]?.passport?.id);
+    if (!rec) throw new Error('passport not found');
+    if (rec.status !== 'active') throw new Error(`passport is ${rec.status}`);
+    const { status, root, profile, ...passport } = rec;
+    const vc = await passportToCredential(passport, this.authority.signer, { principal: root, status });
+    return { credential: vc, verified: await verifyCredential(vc) };
   }
 
   // ---------------------------------------------------------------- federation

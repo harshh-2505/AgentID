@@ -76,7 +76,9 @@ export class Signer {
 export async function verifySealed(obj, expectedKid) {
   try {
     const { proof, ...body } = obj || {};
-    if (!proof || proof.alg !== 'Ed25519' || !proof.sig) return false;
+    // One signature, one spelling: exactly 86 unpadded base64url characters, canonical tail bits.
+    if (!proof || proof.alg !== 'Ed25519' || typeof proof.sig !== 'string' || !/^[A-Za-z0-9_-]{86}$/.test(proof.sig)) return false;
+    if (b64u(unb64u(proof.sig)) !== proof.sig) return false;
     if (expectedKid && proof.kid !== expectedKid) return false;
     const key = await importVerifyKey(proof.kid);
     return await crypto.subtle.verify(ALG, key, unb64u(proof.sig), utf8(canonical(body)));

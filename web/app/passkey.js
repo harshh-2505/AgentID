@@ -3,7 +3,7 @@
 // usually can't, so the demo falls back to a virtual authenticator that produces the
 // same standard WebAuthn bytes, and says so.
 
-import { b64u, unb64u, utf8 } from '../../core/encoding.js';
+import { b64u, unb64u, utf8 } from '../core/encoding.js';
 
 const canUseReal = () => typeof PublicKeyCredential !== 'undefined' && window.isSecureContext && location.origin !== 'null' && !!navigator.credentials?.create;
 

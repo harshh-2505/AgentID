@@ -40,7 +40,8 @@ console.log(`witness ${witness.name}  ${witness.did}`);
 console.log(`watching ${url} every ${interval / 1000}s`);
 
 let stopping = false;
-for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { stopping = true; });
+let wake = () => {};
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { stopping = true; wake(); });
 
 while (!stopping) {
   try {
@@ -56,5 +57,6 @@ while (!stopping) {
       console.warn(`${new Date().toISOString()}  round failed: ${e.message}`);
     }
   }
-  await new Promise((r) => { const t = setTimeout(r, interval); if (stopping) clearTimeout(t); });
+  if (stopping) break;
+  await new Promise((r) => { const t = setTimeout(r, interval); wake = () => { clearTimeout(t); r(); }; });
 }

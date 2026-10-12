@@ -20,6 +20,8 @@ mandate "Market research" for scout
   allow web.fetch on https://*
   allow data.read on warehouse:* where classification in [public, internal]
   allow email.send on mail:outbound where to matches [*@northwind.example]
+  allow mcp.tool:github/search_* on mcp:github/*
+  allow mcp.tool:github/get_* on mcp:github/*
   rate 8 per 10s
 
 # Quill's "Invoice reading" mandate is delegated by Ledgerline, not issued by the

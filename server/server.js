@@ -23,7 +23,7 @@ import { buildAuthorityOptions, moduleRoutes, attachIntegrations } from './modul
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DATA = path.join(ROOT, 'data', 'world.json');
-const STATIC = { '/core/': path.join(ROOT, 'core'), '/': path.join(ROOT, 'web') };
+const STATIC = { '/core/': path.join(ROOT, 'core'), '/gateway/': path.join(ROOT, 'gateway'), '/policy/': path.join(ROOT, 'policy'), '/': path.join(ROOT, 'web') };
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png' };
 
 const config = loadConfig(process.env);
@@ -51,8 +51,14 @@ function wire(a) {
   });
 }
 
+// The demo organisation brings its own key and a fresh in-memory store on every reset.
+function demoOptions() {
+  const { signer, store, ...rest } = options;
+  return rest;
+}
+
 async function loadWorld() {
-  const { signer, ...authorityOptions } = options;
+  const authorityOptions = demoOptions();
   if (existsSync(DATA)) {
     try {
       const w = await DemoWorld.restore(JSON.parse(await readFile(DATA, 'utf8')), authorityOptions);
@@ -115,10 +121,6 @@ const routes = [
   ['GET', '/v1/trust-bundle', () => A().trustBundle({ name: config.name, endpoints: { api: config.issuer + '/v1' } })],
   ['GET', '/v1/ledger', (_, __, q) => A().ledgerEntries({ from: int(q, 'from', 0), limit: Math.min(500, int(q, 'limit', 200)) })],
   ['GET', '/v1/ledger/verify', () => A().verifyLedger()],
-  ['GET', '/v1/checkpoint', () => A().checkpoint()],
-  ['GET', '/v1/proofs/inclusion', (_, __, q) => A().inclusionProof(int(q, 'seq', 0), q.has('size') ? int(q, 'size') : undefined)],
-  ['GET', '/v1/proofs/consistency', (_, __, q) => A().consistencyProof(int(q, 'first', 1), q.has('second') ? int(q, 'second') : undefined)],
-  ['POST', '/v1/witness', (b) => A().recordWitness(b)],
 
   ['GET', '/api/health', () => ({ ok: true, mode: demo ? 'server' : 'production', authority: A().did })],
   ['GET', '/api/snapshot', () => (world ? world.snapshot() : A().snapshot())],
@@ -142,8 +144,11 @@ const routes = [
   ['POST', '/api/demo/passkey/approval-challenge', (b) => W().passkeyApprovalChallenge(b.id, b.decision)],
   ['POST', '/api/demo/passkey/approve', (b) => W().approveWithPasskey(b.id, b.decision, b.assertion)],
   ['POST', '/api/demo/federation', (b) => W().federation(b.kind)],
+  ['POST', '/api/demo/mcp', (b) => W().mcp(b.kind)],
+  ['POST', '/api/demo/oauth', (b) => W().oauth({ svid: !!b.svid })],
+  ['POST', '/api/demo/credential', (b) => W().credential(b.agent)],
   ['POST', '/api/demo/reset', async () => {
-    world = await DemoWorld.create({ authorityOptions: (({ signer, ...o }) => o)(options) });
+    world = await DemoWorld.create({ authorityOptions: demoOptions() });
     authority = world.authority;
     wire(authority);
     detach.current?.();

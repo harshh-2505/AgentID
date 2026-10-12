@@ -77,6 +77,9 @@ class LocalBackend {
   passkeyApprovalChallenge(id, decision) { return this.world.passkeyApprovalChallenge(id, decision); }
   approveWithPasskey(id, decision, assertion) { return this.world.approveWithPasskey(id, decision, assertion); }
   federation(kind) { return this.world.federation(kind); }
+  mcp(kind) { return this.world.mcp(kind); }
+  oauth(svid) { return this.world.oauth({ svid }); }
+  credential(agent) { return this.world.credential(agent); }
   async checkpoint() {
     const A = this.world.authority;
     const cp = await A.checkpoint();
@@ -129,6 +132,9 @@ class RemoteBackend {
   passkeyApprovalChallenge(id, decision) { return this.#call('POST', 'api/demo/passkey/approval-challenge', { id, decision }); }
   approveWithPasskey(id, decision, assertion) { return this.#call('POST', 'api/demo/passkey/approve', { id, decision, assertion }); }
   federation(kind) { return this.#call('POST', 'api/demo/federation', { kind }); }
+  mcp(kind) { return this.#call('POST', 'api/demo/mcp', { kind }); }
+  oauth(svid) { return this.#call('POST', 'api/demo/oauth', { svid }); }
+  credential(agent) { return this.#call('POST', 'api/demo/credential', { agent }); }
   checkpoint() { return this.#call('GET', 'api/checkpoint'); }
   webauthn() { return this.webauthnConfig; }
   rawCheckpoint() { return this.#call('GET', 'v1/checkpoint'); }

@@ -10,7 +10,7 @@ const regexCache = new Map();
 function globRegex(pattern) {
   let re = regexCache.get(pattern);
   if (!re) {
-    re = new RegExp('^' + pattern.split('*').map((p) => p.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$');
+    re = new RegExp('^' + pattern.split('*').map((p) => p.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('[\\s\\S]*') + '$');
     regexCache.set(pattern, re);
   }
   return re;

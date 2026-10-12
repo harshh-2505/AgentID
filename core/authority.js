@@ -114,7 +114,7 @@ export class Authority {
       let admittedAs = null;
       if (this.admit) {
         const verdict = await this.admit(reg, evidence);
-        if (!verdict?.ok) throw new Error('registration not admitted: ' + (verdict?.reason || 'no reason given'));
+        if (!verdict?.ok) throw Object.assign(new Error('registration not admitted: ' + (verdict?.reason || 'no reason given')), { status: 403 });
         admittedAs = verdict.subject || null;
       }
       if (reg.recovery && !(Number.isInteger(reg.recovery.k) && reg.recovery.k >= 1 && reg.recovery.of?.length >= reg.recovery.k && reg.recovery.of.every(isDid))) {
@@ -505,9 +505,9 @@ export class Authority {
     const nowMs = this.nowMs();
     if (!prof.actions.length) add(5, 'no behavioral history yet');
     else if (!prof.actions.includes(intent.action)) add(15, `first use of ${intent.action}`);
-    if (prof.resources.length && !prof.resources.includes(intent.resource)) add(20, `first contact with ${intent.resource}`);
+    if (prof.resources.length && !prof.resources.includes(intent.resource)) add(10, `first contact with ${intent.resource}`);
     const burst = prof.recent.filter((t) => nowMs - t < 10_000).length;
-    if (burst >= 5) add(25, `${burst + 1} actions within 10 seconds`);
+    if (burst >= 5) add(20, `${burst + 1} actions within 10 seconds`);
     if (amount && prof.amounts.length >= 3) {
       const med = median(prof.amounts);
       if (med > 0 && amount > 2.5 * med) add(20, `amount is ${(amount / med).toFixed(1)}× this agent's typical`);

@@ -113,3 +113,26 @@ test('postgres store: two authority processes on one database never double-spend
   assert.equal(c1.root, c2.root, 'both instances checkpoint the same log');
   await db.close();
 });
+
+// Runs only against a real Postgres (CI sets AGENTID_TEST_DATABASE_URL). Two pools mean
+// real concurrent connections, so this exercises the advisory lock, not an in-process queue.
+test('postgres store: two pools on a real server serialise through the advisory lock', { skip: !process.env.AGENTID_TEST_DATABASE_URL && 'set AGENTID_TEST_DATABASE_URL to run' }, async () => {
+  const url = process.env.AGENTID_TEST_DATABASE_URL;
+  const s1 = await PostgresStore.connect(url);
+  const s2 = await PostgresStore.connect(url);
+  await s1.db.query('TRUNCATE agentid_records, agentid_nonces, agentid_ledger, agentid_meta');
+  try {
+    const signer = await Signer.generate();
+    const A1 = new Authority(signer, { store: s1 });
+    const A2 = new Authority(await Signer.fromJwk(signer.export()), { store: s2 });
+    const { agent } = await org(A1, { cosign: null });
+    const burst = await Promise.all(Array.from({ length: 30 }, async (_, i) => (i % 2 ? A1 : A2).verifyIntent(await pay(agent, 900))));
+    assert.equal(burst.filter((r) => r.decision === 'allow').length, 11);
+    const entries = await A1.ledgerEntries({ limit: 1000 });
+    assert.deepEqual(entries.map((e) => e.seq), entries.map((_, i) => i), 'ledger seq is contiguous');
+    assert.ok((await verifyChain(entries, A1.did)).ok);
+  } finally {
+    await s1.close();
+    await s2.close();
+  }
+});

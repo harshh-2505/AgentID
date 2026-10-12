@@ -23,6 +23,8 @@
       <div class="chip mode-chip" id="modeChip"><span class="label">Mode</span><span id="modeLabel">—</span></div>
     </div>
     <div class="topbar-actions">
+      <button class="freeze-banner" id="freezeBanner" type="button" title="Open Keys & trust to thaw"><span class="dot" aria-hidden="true"></span>All agents frozen</button>
+      <button class="pill tour-pill" id="tourBtn" type="button"><span class="play" aria-hidden="true"></span><span>Tour</span></button>
       <button class="pill" id="liveToggle" type="button" aria-pressed="true"><span class="pulse-dot" aria-hidden="true"></span><span>Live traffic</span></button>
       <button class="pill" id="uvToggle" type="button" aria-pressed="false" title="Inspect under UV light (dark theme)"><span class="uv-glyph" aria-hidden="true"></span><span>UV light</span></button>
     </div>
@@ -34,7 +36,9 @@
     <a href="#mandates" data-view="mandates"><span class="spine-no">III</span><span class="spine-name">Mandates</span></a>
     <a href="#cosign" data-view="cosign"><span class="spine-no">IV</span><span class="spine-name">Co-sign</span><span class="badge" id="cosignBadge" hidden>0</span></a>
     <a href="#ledger" data-view="ledger"><span class="spine-no">V</span><span class="spine-name">Ledger</span></a>
-    <a href="#reasoning" data-view="reasoning"><span class="spine-no">VI</span><span class="spine-name">Reasoning</span></a>
+    <a href="#keys" data-view="keys"><span class="spine-no">VI</span><span class="spine-name">Keys</span></a>
+    <a href="#integrations" data-view="integrations"><span class="spine-no">VII</span><span class="spine-name">Stack</span></a>
+    <a href="#reasoning" data-view="reasoning"><span class="spine-no">VIII</span><span class="spine-name">Why</span></a>
   </nav>
 
   <main class="view" id="view" tabindex="-1">
